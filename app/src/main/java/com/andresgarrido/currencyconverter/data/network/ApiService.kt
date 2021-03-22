@@ -36,7 +36,7 @@ class KeyInterceptor : Interceptor {
         val originalHttpUrl: HttpUrl = original.url()
 
         val url = originalHttpUrl.newBuilder()
-            .addQueryParameter("access_key", BuildConfig.CURRENY_LAYER_API_KEY)
+            .addQueryParameter("access_key", BuildConfig.CURRENCY_LAYER_API_KEY)
             .build()
 
         // Request customization: add request headers

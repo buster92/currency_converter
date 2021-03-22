@@ -5,7 +5,7 @@ Android app demonstrating https://currencylayer.com/ API
 ### Installation
 - Pull the project and add CurrencyLayer API key into $HOME/.gradle/gradle.properties file:
 ```
-CURRENY_LAYER_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxx
+CURRENCY_LAYER_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### Features
@@ -20,3 +20,4 @@ CURRENY_LAYER_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxx
 ### TODOs
 - Improve API error catching and messages displayed to user.
 - Improve UI
+- Add unit testing
