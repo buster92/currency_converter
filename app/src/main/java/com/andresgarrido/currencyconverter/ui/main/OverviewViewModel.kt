@@ -1,73 +1,148 @@
-/*
- * Copyright 2019, The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
 package com.andresgarrido.currencyconverter.ui.main
 
+import android.app.Application
 import android.util.Log
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.andresgarrido.currencyconverter.network.MarsApiService
+import android.view.View
+import androidx.lifecycle.*
+import com.andresgarrido.currencyconverter.data.CurrencyListRepository
+import com.andresgarrido.currencyconverter.data.QuoteExchangeRepository
+import com.andresgarrido.currencyconverter.data.network.Resource
+import com.andresgarrido.currencyconverter.model.QuoteItem
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.lang.Exception
 
-/**
- * The [ViewModel] that is attached to the [OverviewFragment].
- */
-class OverviewViewModel : ViewModel() {
 
-    enum class LoadingStatus { LOADING, DONE, ERROR }
+class OverviewViewModel(
+    application: Application
+) : AndroidViewModel(application) {
 
-    private val LOG_TAG = "CONVERTER_VM"
+    private val currencyListRepository = CurrencyListRepository(application)
+    private val quoteExchangeRepository = QuoteExchangeRepository(application)
 
-    // internals
-    private val _response = MutableLiveData<String>()
-    private val _status = MutableLiveData<LoadingStatus>()
+    //external
+    val errorMessage: MutableLiveData<String> = MutableLiveData("")
 
-    // externals
-    val response: LiveData<String>
-        get() = _response
-    val status: LiveData<LoadingStatus>
-        get() = _status
+    val currencyListMediator = MediatorLiveData<List<String>>()
 
+    val selectedCurrencyData: MutableLiveData<String> = MutableLiveData<String>("")
+
+    val quoteListMediator = MediatorLiveData<List<QuoteItem>>()
+
+    val progressVisible = MutableLiveData(View.GONE)
+
+    //internal
+    private var enteredAmount: MutableLiveData<Double> = MutableLiveData(0.0)
+
+    private val quoteList: LiveData<List<QuoteItem>> = quoteExchangeRepository
+        .getQuoteExchangeFor(selectedCurrencyData.value ?: "").map { list ->
+            val result = ArrayList<QuoteItem>()
+            if (list.data != null) {
+                list.data.map { item ->
+                    result.add(QuoteItem(item.exchange, item.value))
+                }
+            }
+            result
+        }
+
+    private val currencyList: LiveData<List<String>> =
+        currencyListRepository.getAllCurrencyTypes().map { list ->
+            val result = ArrayList<String>()
+            if (list.data != null) {
+                list.data.map { item ->
+                    result.add(item.name)
+                }
+            }
+            result
+        }
+
+
+    fun onPasswordTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+        Log.d("BIND", "text changed: $s")
+
+        var amount = 0.0
+        if (s.isEmpty()) {
+            errorMessage.value = ""
+            return
+        }
+
+        try {
+            amount = s.toString().toDouble()
+
+            errorMessage.value = ""
+        } catch (e: Exception) {
+            e.printStackTrace()
+            errorMessage.value = "Unable to convert amount."
+        }
+        generateConversionRates(amount)
+    }
+
+    private fun loadQuotes() {
+
+
+    }
+
+    private fun generateConversionRates(amount: Double) {
+
+        val currency = selectedCurrencyData.value
+        Log.d("ViewModel", "currency: $currency")
+
+        enteredAmount.postValue(amount)
+    }
 
     init {
         getData()
     }
 
     private fun getData() {
-        viewModelScope.launch {
-            val currencyList = MarsApiService.retrofitService.getProperties()
-            if (currencyList.success) {
+        currencyListMediator.addSource(currencyList) {
+            currencyListMediator.value = it
+        }
 
-                if (currencyList.currencies == null) {
-                    _response.value = "Currencies data broken"
-                    return@launch
+        quoteListMediator.addSource(quoteList) {
+            quoteListMediator.value = it
+        }
+        quoteListMediator.addSource(selectedCurrencyData) {
+            errorMessage.postValue("")
+            Log.d("VM", "quoteListMediator, currency selected: $it")
+            if (it.isNullOrEmpty())
+                return@addSource
+
+            progressVisible.postValue(View.VISIBLE)
+            viewModelScope.launch(Dispatchers.IO) {
+                val response = quoteExchangeRepository.getQuoteExchangeList(it)
+                if (response.status == Resource.Status.ERROR) {
+                    errorMessage.postValue(response.message!!)
+                    quoteListMediator.postValue(ArrayList())
+                } else {
+                    quoteListMediator.postValue(
+                        response.data?.map { item ->
+                            QuoteItem(item.exchange, item.value)
+                        }
+                    )
                 }
-
-                _response.value = "Data fetched successfully"
-
-                for ((k, v) in currencyList.currencies) {
-                    Log.d(LOG_TAG, "$k: $v")
-                }
+                progressVisible.postValue(View.GONE)
             }
-            else {
-                val errorMessage = currencyList.error?.info
-                _response.value = "Error: $errorMessage"
+        }
+        quoteListMediator.addSource(enteredAmount) {
+            errorMessage.postValue("")
+            val currency = selectedCurrencyData.value
+            if (currency.isNullOrEmpty())
+                return@addSource
+
+            viewModelScope.launch(Dispatchers.IO) {
+                val response = quoteExchangeRepository.getQuoteExchangeList(currency)
+                if (response.status == Resource.Status.ERROR) {
+                    errorMessage.postValue(response.message!!)
+                    quoteListMediator.postValue(ArrayList())
+                } else {
+                    quoteListMediator.postValue(
+                        response.data?.map { item ->
+                            QuoteItem(item.exchange, item.value * it)
+                        }
+                    )
+
+                }
             }
         }
     }

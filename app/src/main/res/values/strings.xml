@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">CurrencyConverter</string>
+
+    <string name="hint_number_input">100.00</string>
 </resources>

@@ -1,4 +1,4 @@
-package com.andresgarrido.currencyconverter.network
+package com.andresgarrido.currencyconverter.data.network
 
 import com.andresgarrido.currencyconverter.BuildConfig
 import com.squareup.moshi.Moshi
@@ -8,7 +8,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
 
-object MarsApiService {
+object ApiService {
     val retrofitService : ApiInterface by lazy { retrofit.create(ApiInterface::class.java) }
 }
 
